@@ -1,1 +1,1 @@
-//bakımda birazdan atarim yenisini
+//bakımda
