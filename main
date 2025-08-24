@@ -1,0 +1,224 @@
+-- Kavo UI Library
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+local Window = Library.CreateLib("Squid Game 2042 GUI", "DarkTheme")
+
+-- Hizmetler
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+
+-- Hack değişkenleri
+local espEnabled = false
+local speedEnabled = false
+local speedValue = 50
+local jumpEnabled = false
+local jumpPower = 100
+
+-- ESP tabloları
+local ESPBillboards = {}
+
+-- Takım kontrol fonksiyonu
+local function isEnemy(player)
+    if not player or player == LocalPlayer then return false end
+    local myTeam = LocalPlayer.Team
+    if myTeam and player.Team and myTeam == player.Team then
+        return false
+    end
+    return true
+end
+
+-- ESP oluşturma
+local function createESP(player)
+    if ESPBillboards[player.Character] then return end
+
+    local Box = Drawing.new("Square")
+    Box.Thickness = 1.5
+    Box.Filled = false
+    Box.Color = Color3.fromRGB(255, 255, 255)
+
+    local HealthBarOutline = Drawing.new("Square")
+    HealthBarOutline.Thickness = 1
+    HealthBarOutline.Filled = false
+    HealthBarOutline.Color = Color3.fromRGB(0, 0, 0)
+
+    local HealthBar = Drawing.new("Square")
+    HealthBar.Thickness = 1
+    HealthBar.Filled = true
+    HealthBar.Color = Color3.fromRGB(0, 255, 0)
+
+    ESPBillboards[player.Character] = true
+
+    RunService.RenderStepped:Connect(function()
+        if espEnabled and player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and isEnemy(player) then
+            local HumanoidRootPart = player.Character.HumanoidRootPart
+            local Humanoid = player.Character.Humanoid
+            local Vector, onScreen = Camera:WorldToViewportPoint(HumanoidRootPart.Position)
+
+            if onScreen then
+                local headPos = Camera:WorldToViewportPoint(HumanoidRootPart.Position + Vector3.new(0, 2.5, 0))
+                local legPos = Camera:WorldToViewportPoint(HumanoidRootPart.Position - Vector3.new(0, 2.5, 0))
+                local boxHeight = math.abs(legPos.Y - headPos.Y)
+                local boxWidth = boxHeight / 2
+
+                Box.Size = Vector2.new(boxWidth, boxHeight)
+                Box.Position = Vector2.new(Vector.X - boxWidth / 2, headPos.Y)
+                Box.Visible = true
+
+                local healthPercent = math.clamp(Humanoid.Health / Humanoid.MaxHealth, 0, 1)
+                HealthBarOutline.Size = Vector2.new(4, boxHeight)
+                HealthBarOutline.Position = Vector2.new(Vector.X - boxWidth / 2 - 6, headPos.Y)
+                HealthBarOutline.Visible = true
+
+                HealthBar.Size = Vector2.new(2, boxHeight * healthPercent)
+                HealthBar.Position = Vector2.new(Vector.X - boxWidth / 2 - 5, headPos.Y + (boxHeight * (1 - healthPercent)))
+                HealthBar.Color = Color3.fromRGB(255 - (healthPercent * 255), healthPercent * 255, 0)
+                HealthBar.Visible = true
+            else
+                Box.Visible = false
+                HealthBar.Visible = false
+                HealthBarOutline.Visible = false
+            end
+        else
+            Box.Visible = false
+            HealthBar.Visible = false
+            HealthBarOutline.Visible = false
+        end
+    end)
+end
+
+-- Yeni oyuncular
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        createESP(player)
+    end)
+end)
+
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        if player.Character then
+            createESP(player)
+        end
+        player.CharacterAdded:Connect(function()
+            createESP(player)
+        end)
+    end
+end
+
+-- Speed & Jump
+RunService.RenderStepped:Connect(function()
+    if speedEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = speedValue
+    end
+    if jumpEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.JumpPower = jumpPower
+    end
+end)
+
+-- GUI
+local MainTab = Window:NewTab("Main")
+local MainSection = MainTab:NewSection("Hacks")
+MainSection:NewToggle("Toggle ESP", "Düşman ESP", function(state)
+    espEnabled = state
+end)
+MainSection:NewToggle("Toggle Speed", "Speed Hack", function(state)
+    speedEnabled = state
+end)
+MainSection:NewSlider("Speed Value", "Yürüme hızı", 200, 16, function(value)
+    speedValue = value
+end)
+MainSection:NewToggle("Toggle Jump", "Jump Hack", function(state)
+    jumpEnabled = state
+end)
+MainSection:NewSlider("Jump Power", "Zıplama gücü", 200, 50, function(value)
+    jumpPower = value
+end)
+
+-- ==================================
+-- Aimbot
+-- ==================================
+local Aimbot = {}
+Aimbot.Enabled = false
+Aimbot.FOV = 50
+Aimbot.TargetPartName = "Head"
+Aimbot.Target = nil
+
+local ScreenCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+local function getAngleBetween(screenPos, center)
+    return (screenPos - center).Magnitude
+end
+
+function Aimbot:GetClosestTarget()
+    local closestTarget = nil
+    local shortestDistance = math.huge
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and isEnemy(player) and player.Character and player.Character:FindFirstChild(Aimbot.TargetPartName) and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            local part = player.Character[Aimbot.TargetPartName]
+            local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                local dist = getAngleBetween(Vector2.new(screenPos.X, screenPos.Y), ScreenCenter)
+                if dist < Aimbot.FOV and dist < shortestDistance then
+                    shortestDistance = dist
+                    closestTarget = part
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+-- Aimbot Tab
+local AimbotTab = Window:NewTab("Aimbot")
+local AimbotSection = AimbotTab:NewSection("Aimbot Settings")
+AimbotSection:NewToggle("Aimbot Active", "Toggle aimbot on/off", function(state)
+    Aimbot.Enabled = state
+end)
+AimbotSection:NewSlider("Aimbot FOV", "Adjust the aiming field of view", 150, 50, function(value)
+    Aimbot.FOV = value
+end)
+AimbotSection:NewDropdown("Aimbot Target Part", "Choose which part to aim at", {"Head", "HumanoidRootPart"}, function(selected)
+    Aimbot.TargetPartName = selected
+end)
+
+-- Sağ tık ile aimbot
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if Aimbot.Enabled then
+            Aimbot.Target = true
+        end
+    end
+end)
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        Aimbot.Target = nil
+    end
+end)
+
+-- Aimbot loop
+RunService.RenderStepped:Connect(function()
+    if Aimbot.Enabled and Aimbot.Target then
+        local target = Aimbot:GetClosestTarget()
+        if target then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Position)
+        end
+    end
+end)
+
+-- FOV Circle
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Radius = Aimbot.FOV
+FOVCircle.Color = Color3.fromRGB(255, 0, 0)
+FOVCircle.Thickness = 2
+FOVCircle.Filled = false
+FOVCircle.Visible = false
+
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    FOVCircle.Radius = Aimbot.FOV
+    FOVCircle.Visible = Aimbot.Enabled or false
+end)
